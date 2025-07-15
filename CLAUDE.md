@@ -166,9 +166,10 @@ server/
 - **Move Categorization**: Classify moves as tactics, strategy, blunders, etc.
 - **Explanation Generation**: Create natural language coaching explanations
 - **ELO-Specific Focus**: Emphasize concepts relevant to user's skill level
-  - 800-1200: Basic tactics, piece development, center control
-  - 1200-1600: Pattern recognition, tactical combinations, endgame basics
-  - 1600-2000: Advanced tactics, positional understanding, strategic planning
+  - 0-600: Chess fundamentals, piece movement, basic trading
+  - 600-1000: Basic tactics, opening principles, piece coordination
+  - 1000-1600: Advanced tactics, pawn structure, middle game planning
+  - 1600-2200: Strategic planning, complex tactics, opening theory
 
 ## Development Commands
 
@@ -235,23 +236,45 @@ npm run test:watch   # Run tests in watch mode
 
 ## Analysis Engine Rules (MVP)
 
-### ELO 800-1200 Focus Areas
-- **Opening Principles**: Control center with e4/d4, develop knights before bishops
-- **Basic Tactics**: Pins, forks, skewers, discovered attacks
-- **Piece Safety**: Don't hang pieces, protect attacked pieces
-- **King Safety**: Castle early, keep king protected
-- **Basic Endgames**: King and pawn vs king, basic checkmate patterns
+### ELO 0-600 Focus Areas (Chess Fundamentals)
+- **Piece Movement**: How each piece moves and captures, special rules (castling, en passant)
+- **Piece Values**: Pawn=1, Knight/Bishop=3, Rook=5, Queen=9, understanding relative worth
+- **Basic Trading**: Accept all equal trades, take free pieces, avoid hanging pieces
+- **Center Control**: Move pawns to e4/d4 early, understand why center is important
+- **King Safety**: Don't move king into check, understand basic checkmate threats
+- **Basic Rules**: Check, checkmate, stalemate, draw conditions
+- **Solid Foundation**: Make moves that don't blunder material, develop pieces toward center
 
-### ELO 1200-1600 Focus Areas
-- **Opening Development**: Complete development before attacking
-- **Tactical Patterns**: Back rank mate, double attacks, deflection
-- **Piece Coordination**: Pieces working together, weak squares
-- **Pawn Structure**: Pawn chains, isolated pawns, passed pawns
-- **Endgame Principles**: Opposition, triangulation, basic rook endgames
+### ELO 600-1000 Focus Areas (Basic Tactics Introduction)
+- **Opening Principles**: Control center, develop knights before bishops, castle early
+- **Basic Tactics**: Forks, pins, skewers, discovered attacks
+- **Tactical Awareness**: Look for hanging pieces, protect attacked pieces
+- **Pressure on Pinned Pieces**: Attack pieces that cannot move (advanced end of range)
+- **Simple Combinations**: 2-3 move tactical sequences
+- **Piece Coordination**: Pieces supporting each other, doubled rooks
+- **Basic Endgames**: King and queen vs king, basic checkmate patterns
 
-### ELO 1600-2000 Focus Areas
-- **Strategic Planning**: Long-term goals, piece placement improvement
-- **Advanced Tactics**: Combinations, sacrifices, positional tactics
-- **Positional Understanding**: Weak squares, piece activity, space advantage
-- **Complex Endgames**: Rook and pawn endgames, minor piece endgames
-- **Time Management**: Efficient calculation, candidate moves
+### ELO 1000-1600 Focus Areas (Intermediate Understanding)
+- **Advanced Tactics**: Back rank mate, double attacks, deflection, decoy
+- **Opening Development**: Complete development before attacking, understand opening principles
+- **Pawn Structure**: Pawn chains, isolated pawns, passed pawns, pawn breaks
+- **Piece Activity**: Active vs passive pieces, improving piece placement
+- **Weak Squares**: Identifying and exploiting holes in opponent's position
+- **Middle Game Planning**: Creating and executing simple plans
+- **Endgame Principles**: Opposition, triangulation, basic rook endgames, pawn endgames
+
+### ELO 1600-2200 Focus Areas (Advanced Understanding)
+- **Strategic Planning**: Long-term positional goals, piece placement improvement
+- **Advanced Tactics**: Complex combinations, sacrifices, positional tactics
+- **Positional Understanding**: Space advantage, weak squares, piece activity evaluation
+- **Opening Theory**: Understanding opening ideas, transpositions, move orders
+- **Complex Endgames**: Rook and pawn endgames, minor piece endgames, practical technique
+- **Time Management**: Efficient calculation, candidate move selection
+- **Psychological Factors**: Creating practical problems, understanding opponent's style
+
+### New ELO Rule Additions (From Prompt)
+- **Dynamic Complexity Scaling**: Adjust explanation complexity based on live calculation of move difficulty and user's ELO rating
+- **Incremental Learning Paths**: Design explanations that build upon previous concepts, creating a progressive skill development framework
+- **Context-Aware Move Recommendations**: Provide move suggestions that are not just statistically sound, but pedagogically appropriate for the user's current skill level
+- **Adaptive Difficulty Progression**: Gradually introduce more complex chess concepts as the user demonstrates mastery of foundational skills
+- **Error-Driven Learning**: Use move mistakes as teaching opportunities, with explanations that highlight specific areas for improvement without overwhelming the user
