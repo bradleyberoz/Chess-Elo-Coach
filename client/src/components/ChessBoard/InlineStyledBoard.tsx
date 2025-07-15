@@ -6,6 +6,8 @@ const InlineStyledBoard = () => {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [gameStatus, setGameStatus] = useState('In Progress');
+  const [draggedPiece, setDraggedPiece] = useState<{ square: string; piece: any } | null>(null);
+  const [dragOverSquare, setDragOverSquare] = useState<string | null>(null);
 
   const makeMove = useCallback((move: { from: string; to: string; promotion?: string }) => {
     const gameCopy = new Chess(game.fen());
@@ -55,6 +57,39 @@ const InlineStyledBoard = () => {
     }
   }, [game, moveHistory]);
 
+  const getPieceSymbol = (piece: any) => {
+    if (!piece) return '';
+    
+    // Using filled Unicode chess pieces for better visual clarity
+    const symbols = {
+      'wp': '♙', 'wr': '♖', 'wn': '♘', 'wb': '♗', 'wq': '♕', 'wk': '♔',
+      'bp': '♟', 'br': '♜', 'bn': '♞', 'bb': '♝', 'bq': '♛', 'bk': '♚'
+    };
+    
+    return symbols[`${piece.color}${piece.type}` as keyof typeof symbols] || '';
+  };
+
+  const getPieceStyle = (piece: any) => {
+    if (!piece) return {};
+    
+    const isWhite = piece.color === 'w';
+    return {
+      color: isWhite ? '#ffffff' : '#2c2c2c',
+      textShadow: isWhite 
+        ? '1px 1px 2px rgba(0,0,0,0.8), 0 0 1px rgba(0,0,0,0.9)' 
+        : '1px 1px 2px rgba(255,255,255,0.3), 0 0 1px rgba(255,255,255,0.4)',
+      fontSize: '38px',
+      fontWeight: 'normal' as const,
+      cursor: piece.color === game.turn() ? 'grab' : 'default',
+      transition: 'all 0.2s ease',
+      userSelect: 'none' as const,
+      WebkitUserSelect: 'none' as const,
+      MozUserSelect: 'none' as const,
+      msUserSelect: 'none' as const,
+      filter: 'none'
+    };
+  };
+
   const handleSquareClick = useCallback((square: string) => {
     if (selectedSquare === null) {
       const piece = game.get(square as any);
@@ -69,16 +104,80 @@ const InlineStyledBoard = () => {
     }
   }, [selectedSquare, game, makeMove]);
 
-  const getPieceSymbol = (piece: any) => {
-    if (!piece) return '';
+  const handleDragStart = useCallback((e: React.DragEvent, square: string) => {
+    const piece = game.get(square as any);
+    if (piece && piece.color === game.turn()) {
+      setDraggedPiece({ square, piece });
+      setSelectedSquare(null); // Clear any existing selection
+      
+      // Create drag image
+      const dragImage = document.createElement('div');
+      dragImage.innerHTML = getPieceSymbol(piece);
+      dragImage.style.fontSize = '36px';
+      dragImage.style.position = 'absolute';
+      dragImage.style.top = '-1000px';
+      dragImage.style.filter = 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))';
+      document.body.appendChild(dragImage);
+      
+      e.dataTransfer.setDragImage(dragImage, 18, 18);
+      e.dataTransfer.effectAllowed = 'move';
+      
+      // Clean up drag image after drag starts
+      setTimeout(() => {
+        document.body.removeChild(dragImage);
+      }, 0);
+    } else {
+      e.preventDefault();
+    }
+  }, [game]);
+
+  const handleDragOver = useCallback((e: React.DragEvent, square: string) => {
+    e.preventDefault();
+    if (draggedPiece) {
+      setDragOverSquare(square);
+      
+      // Check if it's a valid move to show appropriate cursor
+      const move = { from: draggedPiece.square, to: square };
+      const gameCopy = new Chess(game.fen());
+      try {
+        const result = gameCopy.move(move);
+        e.dataTransfer.dropEffect = result ? 'move' : 'none';
+      } catch {
+        e.dataTransfer.dropEffect = 'none';
+      }
+    }
+  }, [draggedPiece, game]);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverSquare(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, square: string) => {
+    e.preventDefault();
+    setDragOverSquare(null);
     
-    const symbols = {
-      'wp': '♙', 'wr': '♖', 'wn': '♘', 'wb': '♗', 'wq': '♕', 'wk': '♔',
-      'bp': '♟', 'br': '♜', 'bn': '♞', 'bb': '♝', 'bq': '♛', 'bk': '♚'
-    };
-    
-    return symbols[`${piece.color}${piece.type}` as keyof typeof symbols] || '';
-  };
+    if (draggedPiece) {
+      const move = { from: draggedPiece.square, to: square };
+      makeMove(move);
+      setDraggedPiece(null);
+    }
+  }, [draggedPiece, makeMove]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedPiece(null);
+    setDragOverSquare(null);
+  }, []);
+
+  const isValidMoveTarget = useCallback((square: string) => {
+    if (!draggedPiece) return false;
+    const move = { from: draggedPiece.square, to: square };
+    const gameCopy = new Chess(game.fen());
+    try {
+      return gameCopy.move(move) !== null;
+    } catch {
+      return false;
+    }
+  }, [draggedPiece, game]);
 
   const isSquareLight = (file: number, rank: number) => {
     return (file + rank) % 2 === 0;
@@ -93,32 +192,61 @@ const InlineStyledBoard = () => {
     const isLastMove = moveHistory.length > 0 && game.history({ verbose: true }).slice(-1)[0] && 
                       (game.history({ verbose: true }).slice(-1)[0].from === squareName || 
                        game.history({ verbose: true }).slice(-1)[0].to === squareName);
+    const isDragSource = draggedPiece?.square === squareName;
+    const isDragOver = dragOverSquare === squareName;
+    const isValidTarget = isDragOver && isValidMoveTarget(squareName);
     
     let backgroundColor = '';
+    let boxShadow = '';
     
-    if (isLastMove) {
-      backgroundColor = isLight ? '#fef08a' : '#eab308'; // Yellow for last move
+    if (isDragSource) {
+      backgroundColor = isLight ? '#d4d4d8' : '#71717a'; // Gray for drag source
+      boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.2)';
+    } else if (isValidTarget) {
+      backgroundColor = isLight ? '#bbf7d0' : '#16a34a'; // Green for valid drop target
+      boxShadow = '0 0 8px rgba(34, 197, 94, 0.4)';
+    } else if (isDragOver) {
+      backgroundColor = isLight ? '#fecaca' : '#dc2626'; // Red for invalid drop target
+      boxShadow = '0 0 8px rgba(220, 38, 38, 0.4)';
+    } else if (isLastMove) {
+      backgroundColor = isLight ? '#fef3c7' : '#ca8a04'; // Yellow for last move
+      boxShadow = '0 0 6px rgba(202, 138, 4, 0.3)';
     } else if (isLight) {
-      backgroundColor = '#fef3c7'; // Light amber
+      backgroundColor = '#f5f5f4'; // Classic light beige
     } else {
-      backgroundColor = '#d97706'; // Dark amber
+      backgroundColor = '#8b5a3c'; // Classic dark brown
+    }
+    
+    let borderColor = 'rgba(0, 0, 0, 0.1)';
+    let borderWidth = '1px';
+    
+    if (isSelected) {
+      borderColor = '#1d4ed8';
+      borderWidth = '3px';
+      boxShadow = '0 0 12px rgba(29, 78, 216, 0.5)';
+    } else if (isValidTarget) {
+      borderColor = '#16a34a';
+      borderWidth = '2px';
+    } else if (isDragOver) {
+      borderColor = '#dc2626';
+      borderWidth = '2px';
     }
     
     return {
       width: '64px',
       height: '64px',
       backgroundColor,
-      border: isSelected ? '4px solid #3b82f6' : '1px solid #92400e',
+      border: `${borderWidth} solid ${borderColor}`,
+      boxShadow,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       cursor: 'pointer',
-      fontSize: '36px',
-      fontWeight: 'bold',
       position: 'relative' as const,
       transition: 'all 0.2s ease',
       boxSizing: 'border-box' as const,
       userSelect: 'none' as const,
+      opacity: isDragSource ? 0.7 : 1,
     };
   };
 
@@ -136,14 +264,26 @@ const InlineStyledBoard = () => {
             key={squareName}
             style={getSquareStyle(squareName, isLight)}
             onClick={() => handleSquareClick(squareName)}
+            onDragOver={(e) => handleDragOver(e, squareName)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, squareName)}
             onMouseEnter={(e) => {
-              (e.target as HTMLElement).style.filter = 'brightness(1.1)';
+              if (!draggedPiece) {
+                (e.target as HTMLElement).style.filter = 'brightness(1.1)';
+              }
             }}
             onMouseLeave={(e) => {
-              (e.target as HTMLElement).style.filter = 'brightness(1)';
+              if (!draggedPiece) {
+                (e.target as HTMLElement).style.filter = 'brightness(1)';
+              }
             }}
           >
-            <span style={{ filter: 'drop-shadow(1px 1px 2px rgba(0,0,0,0.3))' }}>
+            <span 
+              style={getPieceStyle(piece)}
+              draggable={piece && piece.color === game.turn()}
+              onDragStart={(e) => handleDragStart(e, squareName)}
+              onDragEnd={handleDragEnd}
+            >
               {getPieceSymbol(piece)}
             </span>
             
@@ -187,14 +327,19 @@ const InlineStyledBoard = () => {
       maxWidth: '1200px',
       margin: '0 auto',
       padding: '24px',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      backgroundColor: '#f9fafb',
+      minHeight: '100vh'
     }}>
       <h1 style={{
-        fontSize: '2.5rem',
-        fontWeight: 'bold',
+        fontSize: '2.75rem',
+        fontWeight: '600',
         textAlign: 'center',
-        marginBottom: '32px',
-        color: '#1f2937'
+        marginBottom: '40px',
+        color: '#1f2937',
+        textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        letterSpacing: '-0.025em',
+        fontFamily: 'Georgia, serif'
       }}>
         ELO-Tailored Chess Coach
       </h1>
@@ -210,11 +355,14 @@ const InlineStyledBoard = () => {
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(8, 64px)',
-            border: '4px solid #1f2937',
-            borderRadius: '8px',
+            border: '3px solid #44403c',
+            borderRadius: '4px',
             overflow: 'hidden',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            marginBottom: '24px'
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.1)',
+            marginBottom: '32px',
+            background: '#292524',
+            padding: '6px',
+            gap: '1px'
           }}>
             {renderBoard()}
           </div>
@@ -224,22 +372,28 @@ const InlineStyledBoard = () => {
             <button 
               onClick={resetGame}
               style={{
-                backgroundColor: '#2563eb',
+                backgroundColor: '#1d4ed8',
                 color: 'white',
                 padding: '12px 24px',
-                borderRadius: '8px',
-                border: 'none',
-                fontWeight: 'bold',
+                borderRadius: '6px',
+                border: '1px solid #1e40af',
+                fontWeight: '500',
                 cursor: 'pointer',
-                fontSize: '16px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                transition: 'background-color 0.2s'
+                fontSize: '15px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                transition: 'all 0.2s ease',
+                transform: 'translateY(0)',
+                fontFamily: 'system-ui, -apple-system, sans-serif'
               }}
               onMouseEnter={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = '#1d4ed8';
+                (e.target as HTMLElement).style.backgroundColor = '#1e40af';
+                (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+                (e.target as HTMLElement).style.boxShadow = '0 6px 8px -1px rgba(0, 0, 0, 0.15), 0 4px 6px -1px rgba(0, 0, 0, 0.1)';
               }}
               onMouseLeave={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = '#2563eb';
+                (e.target as HTMLElement).style.backgroundColor = '#1d4ed8';
+                (e.target as HTMLElement).style.transform = 'translateY(0)';
+                (e.target as HTMLElement).style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
               }}
             >
               New Game
@@ -248,25 +402,34 @@ const InlineStyledBoard = () => {
               onClick={undoMove}
               disabled={moveHistory.length === 0}
               style={{
-                backgroundColor: moveHistory.length === 0 ? '#9ca3af' : '#4b5563',
+                backgroundColor: moveHistory.length === 0 ? '#9ca3af' : '#6b7280',
                 color: 'white',
                 padding: '12px 24px',
-                borderRadius: '8px',
-                border: 'none',
-                fontWeight: 'bold',
+                borderRadius: '6px',
+                border: moveHistory.length === 0 ? '1px solid #9ca3af' : '1px solid #6b7280',
+                fontWeight: '500',
                 cursor: moveHistory.length === 0 ? 'not-allowed' : 'pointer',
-                fontSize: '16px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                transition: 'background-color 0.2s'
+                fontSize: '15px',
+                boxShadow: moveHistory.length === 0 
+                  ? '0 2px 4px -1px rgba(0, 0, 0, 0.06)' 
+                  : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                transition: 'all 0.2s ease',
+                transform: 'translateY(0)',
+                opacity: moveHistory.length === 0 ? 0.6 : 1,
+                fontFamily: 'system-ui, -apple-system, sans-serif'
               }}
               onMouseEnter={(e) => {
                 if (moveHistory.length > 0) {
-                  (e.target as HTMLElement).style.backgroundColor = '#374151';
+                  (e.target as HTMLElement).style.backgroundColor = '#4b5563';
+                  (e.target as HTMLElement).style.transform = 'translateY(-1px)';
+                  (e.target as HTMLElement).style.boxShadow = '0 6px 8px -1px rgba(0, 0, 0, 0.15), 0 4px 6px -1px rgba(0, 0, 0, 0.1)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (moveHistory.length > 0) {
-                  (e.target as HTMLElement).style.backgroundColor = '#4b5563';
+                  (e.target as HTMLElement).style.backgroundColor = '#6b7280';
+                  (e.target as HTMLElement).style.transform = 'translateY(0)';
+                  (e.target as HTMLElement).style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
                 }
               }}
             >
@@ -279,16 +442,19 @@ const InlineStyledBoard = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Game Status */}
           <div style={{
-            backgroundColor: '#f3f4f6',
+            backgroundColor: '#ffffff',
             borderRadius: '8px',
             padding: '24px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            border: '1px solid #e5e7eb'
           }}>
             <h3 style={{
               fontSize: '1.25rem',
-              fontWeight: 'bold',
+              fontWeight: '600',
               marginBottom: '16px',
-              color: '#1f2937'
+              color: '#1f2937',
+              borderBottom: '2px solid #e5e7eb',
+              paddingBottom: '8px'
             }}>
               Game Info
             </h3>
@@ -312,16 +478,19 @@ const InlineStyledBoard = () => {
 
           {/* Move History */}
           <div style={{
-            backgroundColor: '#f3f4f6',
+            backgroundColor: '#ffffff',
             borderRadius: '8px',
             padding: '24px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            border: '1px solid #e5e7eb'
           }}>
             <h3 style={{
               fontSize: '1.25rem',
-              fontWeight: 'bold',
+              fontWeight: '600',
               marginBottom: '16px',
-              color: '#1f2937'
+              color: '#1f2937',
+              borderBottom: '2px solid #e5e7eb',
+              paddingBottom: '8px'
             }}>
               Move History
             </h3>
@@ -375,16 +544,19 @@ const InlineStyledBoard = () => {
 
           {/* Instructions */}
           <div style={{
-            backgroundColor: '#dbeafe',
+            backgroundColor: '#f8fafc',
             borderRadius: '8px',
             padding: '24px',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            border: '1px solid #e2e8f0'
           }}>
             <h3 style={{
               fontSize: '1.25rem',
-              fontWeight: 'bold',
+              fontWeight: '600',
               marginBottom: '16px',
-              color: '#1e40af'
+              color: '#1f2937',
+              borderBottom: '2px solid #e2e8f0',
+              paddingBottom: '8px'
             }}>
               How to Play
             </h3>
@@ -393,10 +565,13 @@ const InlineStyledBoard = () => {
               flexDirection: 'column',
               gap: '8px',
               fontSize: '14px',
-              color: '#1e40af'
+              color: '#4b5563'
             }}>
               <p>• Click on a piece to select it</p>
               <p>• Click on a destination to move</p>
+              <p>• Or drag and drop pieces to move</p>
+              <p>• Green = valid drop target</p>
+              <p>• Red = invalid drop target</p>
               <p>• Selected piece has blue border</p>
               <p>• Last move is highlighted in yellow</p>
               <p>• Only legal moves are allowed</p>
